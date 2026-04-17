@@ -1,130 +1,123 @@
-# Lead Machine — Setup-guide
+# Lead Machine — Dokumentation
 
-## Steg 1: Skapa konton (engångsjobb)
-
-### Supabase (databasen)
-1. Gå till supabase.com → skapa gratis konto
-2. Skapa nytt projekt, välj "Europe (Frankfurt)"
-3. Gå till "SQL Editor" → klistra in innehållet från `supabase/schema.sql` → kör
-
-### Google Cloud (för Maps-scraping)
-1. console.cloud.google.com → skapa projekt
-2. Aktivera dessa APIs:
-   - Places API (New)
-   - PageSpeed Insights API
-3. Skapa API-nyckel under "Credentials"
-
-### Anthropic (Claude)
-1. console.anthropic.com → skapa konto
-2. Skapa API-nyckel
-
-### SendGrid (email)
-1. sendgrid.com → skapa gratis konto
-2. Verifiera din domän (calidad.se) — kritiskt för deliverability
-3. Skapa API-nyckel med "Mail Send" behörighet
-4. Sätt upp SendGrid Event Webhook för open/click tracking
+Automatisk cold email-pipeline för Calidad. Hittar svenska tjänsteföretag på Google Maps,
+analyserar deras hemsidor, genererar personliga mail med AI och skickar dem automatiskt.
 
 ---
 
-## Steg 2: Konfigurera miljövariabler
+## Hur det fungerar
 
-### Pipeline (Python)
-```bash
-cp .env.example .env
-# Fyll i alla värden i .env
 ```
+Varje dag (automatiskt via GitHub Actions):
 
-### Dashboard (Next.js)
-```bash
-cd dashboard
-cp .env.local.example .env.local
-# Fyll i Supabase URL och anon key (finns i Supabase → Settings → API)
+07:00  Scraping     → Hittar ~100 nya företag på Google Maps (Stockholm)
+       Analys       → Kollar varje hemsida på ~35 företag
+       Generering   → Skriver personliga mail med OpenAI
+
+09:00  Skickar 3 mail (10–30 min mellanrum)
+12:00  Skickar 3 mail (10–30 min mellanrum)
+15:00  Skickar 4 mail (10–30 min mellanrum)
+
+Totalt: ~10 mail/dag → ~300 mail/månad
 ```
 
 ---
 
-## Steg 3: Installera Python-beroenden
+## Vad analyseras på varje hemsida
+
+- Webbläsaren varnar att sidan "inte är säker" (saknar SSL)
+- Hemsidan ser trasig ut på mobilen
+- Det finns inget sätt att kontakta er via hemsidan
+- Hemsidan syns knappt i Google (saknar titel/beskrivning)
+- Ingen koll på besökare (saknar Google Analytics)
+- Inte kopplad till sociala medier
+- Ingen karta — kunder vet inte var ni finns
+- Hemsidan ser gammal och inte uppdaterad ut
+- Byggd på gratisverktyg (Wix, Strikingly etc.)
+- Laddar långsamt på mobil/dator
+
+---
+
+## Teknikstack
+
+| Del | Teknologi |
+|-----|-----------|
+| Scraping | Google Places API (New) |
+| Hemsideanalys | Python + BeautifulSoup |
+| AI-generering | OpenAI GPT-4o-mini |
+| Databas | Supabase (PostgreSQL) |
+| Mailutskick | Gmail SMTP (elias.ivanoff@gmail.com) |
+| Automation | GitHub Actions |
+| Dashboard | Next.js (lokalt på localhost:3000) |
+
+---
+
+## Mailgräns och spam-skydd
+
+- Max 10 mail/dag (ökas till 20 vecka 2, 35 vecka 3+)
+- 10–30 minuters slumpmässig paus mellan varje mail
+- Mail skickas i 3 omgångar under dagen (ser mänskligt ut)
+- Ingen SendGrid ännu — byt när calidad.se-domänen är klar
+
+---
+
+## API-nycklar (sparade som GitHub Secrets)
+
+| Nyckel | Används till |
+|--------|-------------|
+| GOOGLE_PLACES_API_KEY | Hitta företag på Google Maps |
+| PAGESPEED_API_KEY | Mäta laddningstid på hemsidor |
+| OPENAI_API_KEY | Generera mail med GPT-4o-mini |
+| SUPABASE_URL | Databaskoppling |
+| SUPABASE_SERVICE_KEY | Skriv/läs till databasen |
+| SMTP_USER | elias.ivanoff@gmail.com |
+| SMTP_PASSWORD | Gmail App Password |
+
+---
+
+## Köra manuellt
 
 ```bash
 cd pipeline
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+
+# Hela pipelinen
+python main.py
+
+# Enskilda steg
+python main.py --scrape     # Hitta företag
+python main.py --analyze    # Analysera hemsidor
+python main.py --generate   # Generera mail
+python main.py --send       # Skicka mail
 ```
 
 ---
 
-## Steg 4: Testa pipeline manuellt
-
-```bash
-cd pipeline
-source venv/bin/activate
-
-# Testa att scrapa 10 leads
-python main.py --scrape
-
-# Testa att analysera dem
-python main.py --analyze
-
-# Generera mail med Claude
-python main.py --generate
-
-# KOLLA dashboard innan du skickar!
-# Kör sedan:
-python main.py --send
-```
-
----
-
-## Steg 5: Deploya dashboard på Vercel
+## Dashboard (realtidsöversikt)
 
 ```bash
 cd dashboard
-npx vercel --prod
-# Följ instruktionerna, lägg till env-variabler i Vercel-dashboarden
+npm run dev
+# Öppna http://localhost:3000
+# Lösenord: calidad2024
 ```
 
 ---
 
-## Steg 6: Sätt upp automatisk körning
+## Nästa steg
 
-### Railway (rekommenderat — $5/mån)
-1. railway.app → nytt projekt
-2. Koppla till GitHub-repot
-3. Sätt working directory till `/pipeline`
-4. Sätt start command: `python main.py`
-5. Lägg till Cron Schedule: `0 8 * * *` (kör varje dag kl 08:00)
-6. Lägg till alla .env-variabler
-
----
-
-## Daglig pipeline-körning (automatisk)
-
-```
-Varje dag kl 08:00:
-  1. Skrapar 100 nya företag från Google Maps
-  2. Analyserar deras hemsidor (~35 st/dag)
-  3. Genererar personliga mail med Claude
-  4. Skickar 35 mail (1 050/månad)
-```
-
----
-
-## Viktigt om GDPR
-
-- B2B cold email är tillåtet under "legitimate interest" (GDPR art. 6.1.f)
-- Vi skickar KUN till företag (inte privatpersoner)
-- Varje mail har avprenumerera-länk
-- Lagra inte mer data än nödvändigt
+1. **Höj dagsgränsen** — från 10 till 20 mail/dag efter en vecka
+2. **Byt till SendGrid** — när calidad.se-domänen är konfigurerad hos one.com
+   (se dokumentation i minnet — domänverifiering krävs)
+3. **Deploya dashboard på Vercel** — så kollegor kan se statistik utan att starta lokalt
 
 ---
 
 ## Felsökning
 
-**"No places found"** → Kontrollera Google Places API-nyckel och att API:et är aktiverat
+**Google Places 403** → Gå till console.cloud.google.com → API-nyckel → Application restrictions → sätt till "None"
 
-**"PageSpeed timeout"** → Normal för långsamma sidor, hanteras automatiskt
+**Gmail blockerar utskick** → App Password kan ha gått ut — skapa ett nytt på myaccount.google.com → Säkerhet → Applösenord
 
-**"SendGrid 403"** → Domänen är inte verifierad ännu — gör det i SendGrid-dashboarden
+**Supabase "unique violation"** → Normalt — företaget finns redan i databasen
 
-**"Supabase unique violation"** → Normalt — lead finns redan i databasen
+**GitHub Actions kör inte** → Gå till github.com/EliasxCalidad/lead-machine → Actions → aktivera workflows
