@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # API Keys
-GOOGLE_PLACES_API_KEY = os.environ["GOOGLE_PLACES_API_KEY"]
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+GOOGLE_PLACES_API_KEY = os.environ.get("GOOGLE_PLACES_API_KEY", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 SMTP_USER = os.environ["SMTP_USER"]        # e.g. elias@calidad.se or gmail address
 SMTP_PASSWORD = os.environ["SMTP_PASSWORD"]  # Gmail App Password
 SUPABASE_URL = os.environ["SUPABASE_URL"]
