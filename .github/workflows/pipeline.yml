@@ -53,7 +53,7 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
           cd pipeline
-          python -c "from sender import run_sender; run_sender(max_emails=13)"
+          python -c "from sender import run_sender; run_sender(max_emails=3)"
 
       - name: Send emails (omgång 2 — 12:00)
         if: github.event.schedule == '0 10 * * *'
@@ -64,7 +64,7 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
           cd pipeline
-          python -c "from sender import run_sender; run_sender(max_emails=23)"
+          python -c "from sender import run_sender; run_sender(max_emails=6)"
 
       - name: Send emails (omgång 3 — 15:00)
         if: github.event.schedule == '0 13 * * *'
@@ -75,4 +75,4 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
           cd pipeline
-          python -c "from sender import run_sender; run_sender(max_emails=35)"
+          python -c "from sender import run_sender; run_sender(max_emails=10)"
