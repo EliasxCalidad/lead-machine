@@ -76,3 +76,14 @@ jobs:
         run: |
           cd pipeline
           python -c "from sender import run_sender; run_sender(max_emails=10)"
+
+      - name: Send emails (manuell körning)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          cd pipeline
+          python -c "from sender import run_sender; run_sender(max_emails=10)"
