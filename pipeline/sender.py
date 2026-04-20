@@ -96,19 +96,19 @@ def run_sender(max_emails: int = EMAILS_PER_DAY) -> int:
     log.info(f"Found {len(emails)} emails ready to send")
 
     sent = 0
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.login(SMTP_USER, SMTP_PASSWORD)
-
-        for email_row in emails:
-            lead = email_row.pop("leads", {}) or {}
+    for i, email_row in enumerate(emails):
+        lead = email_row.pop("leads", {}) or {}
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(SMTP_USER, SMTP_PASSWORD)
             if send_email(email_row, lead, smtp):
                 sent += 1
-                # Slumpmässig paus 10–30 min mellan mail för att undvika spam-flaggning
-                delay = random.randint(600, 1800)
-                log.info(f"  Väntar {delay // 60} min innan nästa mail...")
-                time.sleep(delay)
+                if i < len(emails) - 1:
+                    # Slumpmässig paus 10–30 min mellan mail för att undvika spam-flaggning
+                    delay = random.randint(600, 1800)
+                    log.info(f"  Väntar {delay // 60} min innan nästa mail...")
+                    time.sleep(delay)
 
     log.info(f"Sender done: {sent}/{len(emails)} sent")
     return sent
