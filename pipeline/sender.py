@@ -98,17 +98,34 @@ def run_sender(max_emails: int = EMAILS_PER_DAY) -> int:
     sent = 0
     for i, email_row in enumerate(emails):
         lead = email_row.pop("leads", {}) or {}
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.login(SMTP_USER, SMTP_PASSWORD)
-            if send_email(email_row, lead, smtp):
-                sent += 1
-                if i < len(emails) - 1:
-                    # Slumpmässig paus 10–30 min mellan mail för att undvika spam-flaggning
-                    delay = random.randint(600, 1800)
-                    log.info(f"  Väntar {delay // 60} min innan nästa mail...")
-                    time.sleep(delay)
+        for attempt in range(3):
+            smtp = None
+            try:
+                smtp = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.login(SMTP_USER, SMTP_PASSWORD)
+                if send_email(email_row, lead, smtp):
+                    sent += 1
+                break
+            except (smtplib.SMTPException, OSError) as e:
+                wait = 60 * (2 ** attempt)
+                log.warning(f"  SMTP error (attempt {attempt + 1}/3): {e} — retrying in {wait}s")
+                time.sleep(wait)
+            finally:
+                if smtp:
+                    try:
+                        smtp.quit()
+                    except Exception:
+                        pass
+        else:
+            log.error(f"  Gave up on email id={email_row['id']} after 3 attempts")
+
+        if sent > 0 and i < len(emails) - 1:
+            # Slumpmässig paus 10–30 min mellan mail för att undvika spam-flaggning
+            delay = random.randint(600, 1800)
+            log.info(f"  Väntar {delay // 60} min innan nästa mail...")
+            time.sleep(delay)
 
     log.info(f"Sender done: {sent}/{len(emails)} sent")
     return sent
