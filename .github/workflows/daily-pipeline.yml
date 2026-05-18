@@ -1,0 +1,37 @@
+name: Lead Machine — daglig pipeline
+
+on:
+  schedule:
+    # Kör kl 08:00 UTC = 10:00 svensk sommartid (09:00 vintertid)
+    - cron: '0 8 * * 1-5'   # Måndag–fredag
+  workflow_dispatch:          # Möjlighet att starta manuellt via GitHub UI
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180      # Max 3 timmar (sender väntar 10–30 min mellan mail)
+
+    steps:
+      - name: Checkout kod
+        uses: actions/checkout@v4
+
+      - name: Sätt upp Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Installera beroenden
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Kör pipeline
+        working-directory: pipeline
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
+          SMTP_USER:             ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:         ${{ secrets.SMTP_PASSWORD }}
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python main.py
