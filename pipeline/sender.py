@@ -72,7 +72,7 @@ def send_email(email_row: dict, lead: dict, smtp: smtplib.SMTP) -> bool:
         return False
 
 
-def run_sender(max_emails: int = EMAILS_PER_DAY) -> int:
+def run_sender(max_emails: int = EMAILS_PER_DAY, batch_size: int = None) -> int:
     already_sent_today = count_emails_sent_today()
     remaining_today = max_emails - already_sent_today
 
@@ -80,7 +80,8 @@ def run_sender(max_emails: int = EMAILS_PER_DAY) -> int:
         log.info(f"Daily limit reached ({already_sent_today}/{max_emails}). Skipping.")
         return 0
 
-    log.info(f"Can send {remaining_today} more emails today ({already_sent_today} already sent)")
+    to_send = min(remaining_today, batch_size) if batch_size else remaining_today
+    log.info(f"Can send {remaining_today} more emails today ({already_sent_today} already sent) — sending {to_send} now")
 
     result = (
         supabase.table("emails")
@@ -88,7 +89,7 @@ def run_sender(max_emails: int = EMAILS_PER_DAY) -> int:
         .eq("status", "draft")
         .not_.is_("to_email", "null")
         .neq("to_email", "")
-        .limit(remaining_today)
+        .limit(to_send)
         .execute()
     )
 

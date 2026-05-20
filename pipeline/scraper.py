@@ -83,16 +83,26 @@ def upsert_lead(place: dict) -> bool:
     if status == "CLOSED_PERMANENTLY":
         return False
 
-    # Skip if no website (we need a website to analyze)
-    # But keep track of companies without websites too — could be an easy sell
-    if not website:
-        log.debug(f"Skipping {name} — no website")
-        return False
-
     # Skip obvious e-commerce / product sites by URL patterns
-    # (we'll do a deeper check in analyzer)
     skip_domains = ["shopify", "woocommerce", "amazon", "ebay", "etsy"]
     if any(d in (website or "").lower() for d in skip_domains):
+        return False
+
+    # Skip businesses whose Google category is clearly not wellness/beauty.
+    # Google returns the primary type in Swedish when languageCode=sv.
+    REJECTED_CATEGORY_KEYWORDS = [
+        "resebyrå", "resor", "flyg", "hotell", "logi", "vandrarhem",
+        "restaurang", "café", "kafé", "bar ", "nattklubb", "pub",
+        "livsmedel", "mataffär", "apotek", "tandläkare", "läkare",
+        "tandvård", "sjukhus", "klinik för ", "veterinär",
+        "bilverkstad", "fordonsservice", "däckservice",
+        "städfirma", "städservice", "fastighets",
+        "bokhandel", "blomsterhandel",
+        "gym", "fitness", "crossfit",  # These sell memberships, not our target
+    ]
+    category_lower = (category.get("text", "") if isinstance(category, dict) else str(category)).lower()
+    if any(kw in category_lower for kw in REJECTED_CATEGORY_KEYWORDS):
+        log.info(f"  Skipping {name} — wrong category: {category_lower}")
         return False
 
     data = {

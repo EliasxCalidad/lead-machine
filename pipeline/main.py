@@ -5,7 +5,7 @@ Can be run as a cron job daily.
 Usage:
   python main.py              # Full pipeline run
   python main.py --scrape     # Only scrape
-  python main.py --analyze    # Only analyze
+  python main.py --find-emails  # Only find email addresses
   python main.py --generate   # Only generate emails
   python main.py --send       # Only send
 """
@@ -31,7 +31,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 def run_pipeline(
     do_scrape: bool = True,
-    do_analyze: bool = True,
+    do_find_emails: bool = True,
     do_generate: bool = True,
     do_send: bool = True,
 ):
@@ -50,7 +50,7 @@ def run_pipeline(
 
     stats = {
         "scraped": 0,
-        "analyzed": 0,
+        "emails_found": 0,
         "generated": 0,
         "sent": 0,
         "errors": 0,
@@ -64,16 +64,16 @@ def run_pipeline(
             stats["scraped"] = run_scraper(max_new_leads=100)
             log.info(f"Scraped: {stats['scraped']} new leads")
 
-        # Step 2: Analyze
-        if do_analyze:
-            log.info("\n[2/4] ANALYZING websites...")
-            from analyzer import run_analyzer
-            stats["analyzed"] = run_analyzer(limit=60)
-            log.info(f"Analyzed: {stats['analyzed']} websites")
+        # Step 2: Find emails
+        if do_find_emails:
+            log.info("\n[2/4] FINDING email addresses...")
+            from email_finder import run_email_finder
+            stats["emails_found"] = run_email_finder(limit=200)
+            log.info(f"Emails found: {stats['emails_found']}")
 
         # Step 3: Generate emails
         if do_generate:
-            log.info("\n[3/4] GENERATING emails with Claude...")
+            log.info("\n[3/4] GENERATING emails with OpenAI...")
             from ai_processor import run_ai_processor
             stats["generated"] = run_ai_processor(limit=50)
             log.info(f"Generated: {stats['generated']} emails")
@@ -89,13 +89,13 @@ def run_pipeline(
         supabase.table("pipeline_runs").update({
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "scraped_count": stats["scraped"],
-            "analyzed_count": stats["analyzed"],
+            "analyzed_count": stats["emails_found"],
             "emails_sent_count": stats["sent"],
             "errors_count": stats["errors"],
             "status": "completed",
             "log": (
                 f"Scraped: {stats['scraped']}, "
-                f"Analyzed: {stats['analyzed']}, "
+                f"Emails found: {stats['emails_found']}, "
                 f"Generated: {stats['generated']}, "
                 f"Sent: {stats['sent']}"
             ),
@@ -103,10 +103,10 @@ def run_pipeline(
 
         log.info("\n" + "=" * 60)
         log.info("PIPELINE COMPLETE")
-        log.info(f"  Scraped:   {stats['scraped']} new leads")
-        log.info(f"  Analyzed:  {stats['analyzed']} websites")
-        log.info(f"  Generated: {stats['generated']} emails")
-        log.info(f"  Sent:      {stats['sent']} emails")
+        log.info(f"  Scraped:      {stats['scraped']} new leads")
+        log.info(f"  Emails found: {stats['emails_found']}")
+        log.info(f"  Generated:    {stats['generated']} emails")
+        log.info(f"  Sent:         {stats['sent']} emails")
         log.info("=" * 60)
 
     except Exception as e:
@@ -128,14 +128,17 @@ if __name__ == "__main__":
     if "--scrape" in args:
         from scraper import run_scraper
         run_scraper()
-    elif "--analyze" in args:
-        from analyzer import run_analyzer
-        run_analyzer()
+    elif "--find-emails" in args:
+        from email_finder import run_email_finder
+        run_email_finder()
     elif "--generate" in args:
         from ai_processor import run_ai_processor
         run_ai_processor()
     elif "--send" in args:
         from sender import run_sender
         run_sender()
+    elif "--send-one" in args:
+        from sender import run_sender
+        run_sender(batch_size=1)
     else:
         run_pipeline()

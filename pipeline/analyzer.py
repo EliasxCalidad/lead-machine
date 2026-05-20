@@ -21,6 +21,19 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 PAGESPEED_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
+# Booking platforms — these companies have no real website of their own
+BOOKING_PLATFORM_DOMAINS = [
+    "bokadirekt.se",
+    "timma.se",
+    "treatwell.se",
+    "treatwell.com",
+    "fresha.com",
+    "wavy.se",
+    "wavy.com",
+    "bokningssystem.se",
+    "boka.nu",
+]
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -35,21 +48,22 @@ HEADERS = {
 def fetch_website(url: str) -> tuple[str | None, bool]:
     """
     Fetch website HTML. Returns (html, has_ssl).
+    Always tries https first — so a site accessible via https is never
+    incorrectly flagged as missing SSL just because http:// was stored.
     """
-    has_ssl = url.startswith("https://")
+    bare = re.sub(r"^https?://", "", url)
 
-    # Try https first, then http
-    for scheme in (["https://", "http://"] if not url.startswith("http") else [""]):
-        try_url = scheme + url.lstrip("http://").lstrip("https://") if scheme else url
+    for scheme in ["https://", "http://"]:
+        try_url = scheme + bare
         try:
             resp = requests.get(try_url, headers=HEADERS, timeout=10, allow_redirects=True)
-            has_ssl = resp.url.startswith("https://")
             if resp.status_code == 200:
+                has_ssl = resp.url.startswith("https://")
                 return resp.text, has_ssl
         except Exception:
             continue
 
-    return None, has_ssl
+    return None, False
 
 
 def extract_email_from_html(html: str, url: str) -> str | None:
@@ -252,6 +266,35 @@ def build_issues_list(analysis: dict, ps_mobile: int | None, ps_desktop: int | N
 
 # ─── Main analyzer ────────────────────────────────────────────────────────────
 
+def _save_no_website_analysis(lead_id: str, status: str):
+    """Save a placeholder analysis for leads with no real website."""
+    issues = [
+        "Företaget har ingen egen hemsida — kunder som googlar hittar dem inte",
+        "Helt beroende av bokningsplattformens regler, utseende och avgifter",
+        "Ingen möjlighet att visa upp sitt arbete eller bygga förtroende online",
+        "Missar alla kunder som söker på Google efter deras tjänst i närheten",
+    ]
+    analysis_data = {
+        "lead_id": lead_id,
+        "pagespeed_mobile": None,
+        "pagespeed_desktop": None,
+        "has_ssl": None,
+        "has_contact_form": False,
+        "has_google_analytics": False,
+        "has_social_links": False,
+        "has_blog": False,
+        "has_google_maps_embed": False,
+        "meta_title": None,
+        "meta_description": None,
+        "copyright_year": None,
+        "cms_detected": None,
+        "issues": issues,
+        "recommended_package": "Liten (4 500 kr)",
+    }
+    supabase.table("analyses").insert(analysis_data).execute()
+    supabase.table("leads").update({"status": status}).eq("id", lead_id).execute()
+
+
 def analyze_lead(lead: dict) -> bool:
     """Analyze a single lead's website. Returns True on success."""
     lead_id = lead["id"]
@@ -259,8 +302,16 @@ def analyze_lead(lead: dict) -> bool:
     name = lead.get("company_name", "")
 
     if not url:
-        supabase.table("leads").update({"status": "no_website"}).eq("id", lead_id).execute()
-        return False
+        log.info(f"  {name} — ingen hemsida alls")
+        _save_no_website_analysis(lead_id, "no_website")
+        return True
+
+    # Check if URL is a booking platform profile (not a real website)
+    if any(domain in url.lower() for domain in BOOKING_PLATFORM_DOMAINS):
+        platform = next(d for d in BOOKING_PLATFORM_DOMAINS if d in url.lower())
+        log.info(f"  {name} — bara bokningsprofil ({platform})")
+        _save_no_website_analysis(lead_id, "bokadirekt_only")
+        return True
 
     log.info(f"Analyzing: {name} ({url})")
 
@@ -334,7 +385,7 @@ def analyze_lead(lead: dict) -> bool:
 
 def run_analyzer(limit: int = 50) -> int:
     """Analyze pending leads. Returns number successfully analyzed."""
-    result = supabase.table("leads").select("*").eq("status", "pending").limit(limit).execute()
+    result = supabase.table("leads").select("*").in_("status", ["pending"]).limit(limit).execute()
     leads = result.data
     log.info(f"Analyzing {len(leads)} pending leads")
 
