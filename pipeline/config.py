@@ -62,7 +62,7 @@ TARGET_CATEGORIES = [
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
-EMAILS_PER_DAY = 10          # Börja försiktigt — öka till 20 nästa vecka, 35 veckan efter
+EMAILS_PER_DAY = 15          # Börja försiktigt — öka till 20 nästa vecka, 35 veckan efter
 MAX_LEADS_PER_RUN = 50       # Per pipeline run
 DELAY_BETWEEN_REQUESTS = 2   # seconds
 
