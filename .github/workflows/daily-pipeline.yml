@@ -2,14 +2,16 @@ name: Lead Machine — daglig pipeline
 
 on:
   schedule:
-    # Kör kl 08:00 UTC = 10:00 svensk sommartid (09:00 vintertid)
-    - cron: '0 8 * * 1-5'   # Måndag–fredag
-  workflow_dispatch:          # Möjlighet att starta manuellt via GitHub UI
+    - cron: '0 7 * * 1-5'    # 07:00 UTC = 09:00 svensk tid — scrapa + generera
+    - cron: '0 9 * * 1-5'    # 09:00 UTC = 11:00 svensk tid — skicka batch 1
+    - cron: '0 11 * * 1-5'   # 11:00 UTC = 13:00 svensk tid — skicka batch 2
+    - cron: '0 13 * * 1-5'   # 13:00 UTC = 15:00 svensk tid — skicka batch 3
+  workflow_dispatch:
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 180      # Max 3 timmar (sender väntar 10–30 min mellan mail)
+    timeout-minutes: 90
 
     steps:
       - name: Checkout kod
@@ -25,13 +27,56 @@ jobs:
       - name: Installera beroenden
         run: pip install -r pipeline/requirements.txt
 
-      - name: Kör pipeline
+      - name: Scrapa + generera mail (07:00)
+        if: github.event.schedule == '0 7 * * 1-5'
         working-directory: pipeline
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
-          SMTP_USER:             ${{ secrets.SMTP_USER }}
-          SMTP_PASSWORD:         ${{ secrets.SMTP_PASSWORD }}
           SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_USER:             ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:         ${{ secrets.SMTP_PASSWORD }}
+        run: python main.py --scrape && python main.py --find-emails && python main.py --generate
+
+      - name: Skicka batch 1 — 5 mail (09:00)
+        if: github.event.schedule == '0 9 * * 1-5'
+        working-directory: pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_USER:            ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:        ${{ secrets.SMTP_PASSWORD }}
+        run: python -c "from sender import run_sender; run_sender(max_emails=5)"
+
+      - name: Skicka batch 2 — 5 mail (11:00)
+        if: github.event.schedule == '0 11 * * 1-5'
+        working-directory: pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_USER:            ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:        ${{ secrets.SMTP_PASSWORD }}
+        run: python -c "from sender import run_sender; run_sender(max_emails=10)"
+
+      - name: Skicka batch 3 — 5 mail (13:00)
+        if: github.event.schedule == '0 13 * * 1-5'
+        working-directory: pipeline
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_USER:            ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:        ${{ secrets.SMTP_PASSWORD }}
+        run: python -c "from sender import run_sender; run_sender(max_emails=15)"
+
+      - name: Manuell körning — full pipeline
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: pipeline
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_USER:             ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:         ${{ secrets.SMTP_PASSWORD }}
         run: python main.py

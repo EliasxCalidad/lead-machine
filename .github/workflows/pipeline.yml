@@ -1,7 +1,8 @@
-name: Lead Machine Pipeline
+name: Lead Machine Pipeline (INAKTIV)
 
 on:
-  schedule:
+  workflow_dispatch:  # Manuell trigger — ej i bruk, ersatt av daily-pipeline.yml
+  schedule_disabled:
     # Scrapa, analysera och generera mail — varje dag 07:00 svensk tid (05:00 UTC)
     - cron: '0 5 * * *'
     # Skicka omgång 1 — 09:00 svensk tid

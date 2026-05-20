@@ -123,8 +123,8 @@ def run_sender(max_emails: int = EMAILS_PER_DAY, batch_size: int = None) -> int:
             log.error(f"  Gave up on email id={email_row['id']} after 3 attempts")
 
         if sent > 0 and i < len(emails) - 1:
-            # Slumpmässig paus 10–30 min mellan mail för att undvika spam-flaggning
-            delay = random.randint(600, 1800)
+            # Slumpmässig paus 5–15 min mellan mail för att undvika spam-flaggning
+            delay = random.randint(300, 900)
             log.info(f"  Väntar {delay // 60} min innan nästa mail...")
             time.sleep(delay)
 
